@@ -95,43 +95,43 @@ const watcher = chokidar.watch(config.freepbx.voicemaildir, {
 });
 watched = [];
 watcher.on("add", async (filePath, stats) => {
-	if (startup) return;
-	// if the file is already being watched, ignore it, this stops spam from the watcher at startup
-	if (watched.includes(filePath)) return;
-	watched.push(filePath);
-	// extract file name from path
-	let filename = pathSplit(filePath)[pathSplit(filePath).length - 1];
-	if (!filename.endsWith("txt")) return; // ignore anything that isn't a txt file (voicemail info file), we can get other file names based on the name without the extension
-	let mailbox = pathSplit(filePath)[pathSplit(filePath).length - 2];
-	if (mailbox !== "INBOX") return; // ignore anything that isn't in the inbox
-	vmData = fpbxFuncs.parseVoicemailInfo(fs.readFileSync(filePath, "utf8"))
-	// get the extension info from the origmailbox
-	let extData = await lookupExtension(vmData.origmailbox, "ext").catch((error) => {
-		console.log(error);
-	});
-	if(!extData) return; // The extension doesnt have a discord ID set, ignore it
-	let discordId = extData.result.fetchVoiceMail.email;
-	let discordUser = await client.users.fetch(discordId).catch((error) => {
-		console.log(error);
-	});
-	// parse callerid "john doe" <1234> into just john doe and 1234
-	let callerid = vmData.callerid;
-	let calleridName = callerid.split(" <")[0].replaceAll("\"", "");
-	let calleridNumber = callerid.split(" <")[1].replace(">", "");
-	// format the callerid
-	vmData.callerid = `${calleridName} (${calleridNumber})`;
-	// get the voicemail file (.wav)
-	let vmFile = filePath.replace(".txt", ".wav");
-	
-	await discordUser.send({
-		content: `:mailbox_with_mail: New voicemail from ${vmData.callerid}!`,
-		files: [{
-			attachment: vmFile,
-			name: `voicemail.wav`
-		}]
-	}).catch((error) => {
-		console.log(`Could not send voicemail to ${discordUser.tag}, probably because they have DMs disabled\n${error}`);
-	})
+    if (startup) return;
+    if (watched.includes(filePath)) return; 
+    watched.push(filePath);
+    let filename = pathSplit(filePath)[pathSplit(filePath).length - 1];
+    if (!filename.endsWith("wav")) return; 
+    
+    let mailbox = pathSplit(filePath)[pathSplit(filePath).length - 2];
+    if (mailbox !== "INBOX") return;  
+
+    let txtFile = filePath.replace(".wav", ".txt");
+    if (!fs.existsSync(txtFile)) return;
+    vmData = fpbxFuncs.parseVoicemailInfo(fs.readFileSync(txtFile, "utf8"));
+    
+    let extData = await lookupExtension(vmData.origmailbox, "ext").catch((error) => {
+        console.log(error);
+    });
+    if (!extData) return; 
+
+    let discordId = extData.result.fetchVoiceMail.email;
+    let discordUser = await client.users.fetch(discordId).catch((error) => {
+        console.log(error);
+    });
+
+    let callerid = vmData.callerid;
+    let calleridName = callerid.split(" <")[0].replaceAll("\"", "");
+    let calleridNumber = callerid.split(" <")[1].replace(">", "");
+    vmData.callerid = `${calleridName} (${calleridNumber})`;
+
+    await discordUser.send({
+        content: `:mailbox_with_mail: New voicemail from ${vmData.callerid}!`,
+        files: [{
+            attachment: filePath,
+            name: `voicemail.wav`
+        }]
+    }).catch((error) => {
+        console.log(`Could not send voicemail to ${discordUser.tag}, probably because they have DMs disabled\n${error}`);
+    }) 
 });
 
 // Setup Discord bot

@@ -85,7 +85,7 @@ const pbxClient = new FreepbxGqlClient(config.freepbx.url, {
 
 // Setup Discord client
 const Discord = require("discord.js");
-const client = new Discord.Client({ intents: ["Guilds", "GuildMembers"] });
+const client = new Discord.Client({ intents: ["Guilds", "GuildMembers", "DirectMessages"] });
 
 // Setup filesystem monitoring (for new voicemail)
 const chokidar = require("chokidar");
@@ -109,26 +109,33 @@ watcher.on("add", async (filePath, stats) => {
 	let extData = await lookupExtension(vmData.origmailbox, "ext").catch((error) => {
 		console.log(error);
 	});
+	if(!extData) return; // The extension doesnt have a discord ID set, ignore it
 	let discordId = extData.result.fetchVoiceMail.email;
 	let discordUser = await client.users.fetch(discordId).catch((error) => {
 		console.log(error);
 	});
+	// parse callerid "john doe" <1234> into just john doe and 1234
+	let callerid = vmData.callerid;
+	let calleridName = callerid.split(" <")[0].replaceAll("\"", "");
+	let calleridNumber = callerid.split(" <")[1].replace(">", "");
+	// format the callerid
+	vmData.callerid = `${calleridName} (${calleridNumber})`;
 	// get the voicemail file (.wav)
 	let vmFile = filePath.replace(".txt", ".wav");
-	// get buffer from voicemail wav
-	let vmBuffer = fs.readFileSync(vmFile);
-	await discordUser.send(`:mailbox_with_mail: New voicemail from ${vmData.callerid}!`, {
+	
+	await discordUser.send({
+		content: `:mailbox_with_mail: New voicemail from ${vmData.callerid}!`,
 		files: [{
-			attachment: vmBuffer,
-			name: `${vmData.callerid}.wav`
+			attachment: vmFile,
+			name: `voicemail.wav`
 		}]
 	}).catch((error) => {
-		console.log(`Could not send voicemail to ${discordUser.tag}, probably because they have DMs disabled`);
+		console.log(`Could not send voicemail to ${discordUser.tag}, probably because they have DMs disabled\n${error}`);
 	})
 });
 
 // Setup Discord bot
-client.on("ready", () => {
+client.on("ready", async () => {
 	console.log(`Logged in as ${client.user.tag}!`);
 	startup = false;
 });

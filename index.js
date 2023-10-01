@@ -1,6 +1,11 @@
 const config = require("./config.json");
 const fs = require("fs");
 const fpbxFuncs = require("./fpbxFuncs.js");
+const path = require("path");
+function pathSplit(p) {
+	return p.split("/");
+}
+var startup = true;
 
 const lookupExtension = (ident, type) => { // type is either "ext" or "uid"
 	return new Promise((resolve, reject) => {
@@ -89,35 +94,46 @@ const watcher = chokidar.watch(config.freepbx.voicemaildir, {
 	persistent: true
 });
 watched = [];
-watcher.on("add", async (event, path) => {
+watcher.on("add", async (filePath, stats) => {
+	if (startup) return;
 	// if the file is already being watched, ignore it, this stops spam from the watcher at startup
-	if (watched.includes(path)) return;
-	watched.push(path);
+	if (watched.includes(filePath)) return;
+	watched.push(filePath);
+	// extract file name from path
+	let filename = pathSplit(filePath)[pathSplit(filePath).length - 1];
+	if (!filename.endsWith("txt")) return; // ignore anything that isn't a txt file (voicemail info file), we can get other file names based on the name without the extension
+	let mailbox = pathSplit(filePath)[pathSplit(filePath).length - 2];
+	if (mailbox !== "INBOX") return; // ignore anything that isn't in the inbox
+	vmData = fpbxFuncs.parseVoicemailInfo(fs.readFileSync(filePath, "utf8"))
+	// get the extension info from the origmailbox
+	let extData = await lookupExtension(vmData.origmailbox, "ext").catch((error) => {
+		console.log(error);
+	});
+	let discordId = extData.result.fetchVoiceMail.email;
+	let discordUser = await client.users.fetch(discordId).catch((error) => {
+		console.log(error);
+	});
+	// get the voicemail file (.wav)
+	let vmFile = filePath.replace(".txt", ".wav");
+	// get buffer from voicemail wav
+	let vmBuffer = fs.readFileSync(vmFile);
+	await discordUser.send(`:mailbox_with_mail: New voicemail from ${vmData.callerid}!`, {
+		files: [{
+			attachment: vmBuffer,
+			name: `${vmData.callerid}.wav`
+		}]
+	}).catch((error) => {
+		console.log(`Could not send voicemail to ${discordUser.tag}, probably because they have DMs disabled`);
+	})
+});
 
-	// extract file name from path, needs to be node 16 compatible, path.split is not
-	let filename = path.substring(path.lastIndexOf("/") + 1);
+// Setup Discord bot
+client.on("ready", () => {
+	console.log(`Logged in as ${client.user.tag}!`);
+	startup = false;
+});
 
-	// extract mailbox from path (path looks like /var/spool/asterisk/voicemail/default/1000/INBOX/file.wav), needs to be node 16 compatible, path.split is not
-	let mailbox = path.substring(path.lastIndexOf("/", path.lastIndexOf("/") - 1) + 1, path.lastIndexOf("/"));
 
-	if(mailbox !== "INBOX") return; // ignore anything that isn't in the inbox
-	// if its a txt file (voicemail info), open it and get relavent info
-	// make a json object with the callerid, duration, origdate, and origmailbox from the txt file
-	if (filename.endsWith(".txt")) {
-		let file = fs.readFileSync(path, "utf8");
-		let lines = file.split("\n");
-		let callerid = lines[9].split("=")[1].replace(/"/g, "");
-		let duration = lines[17].split("=")[1];
-		let origdate = lines[11].split("=")[1];
-		let origmailbox = lines[2].split("=")[1];
-		let message = {
-			"callerid": callerid,
-			"duration": duration,
-			"origdate": origdate,
-			"origmailbox": origmailbox
-		}
-		// get the extension info from the callerid
-		let ext = await lookupExtension(callerid, "uid");
-		console.log(`New voicemail from ${message.callerid} (${message.duration}s)`);
-	}
+client.login(config.discord.token).catch((error) => {
+	console.log(error);
 });

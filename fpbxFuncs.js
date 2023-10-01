@@ -76,6 +76,20 @@ const minifyQuery = (query) => {
 	return query.replace(/\s+/g, ' ').trim();
 }
 
+const parseVoicemailInfo = (data) => {
+	// split by new line
+	var lines = data.split("\n");
+	// make a json object, all remaining lines are key=value
+	var voicemail = {};
+	lines.forEach((line) => {
+		var split = line.split("=");
+		voicemail[split[0]] = split[1];
+	});
+	// remove any undefined values
+	Object.keys(voicemail).forEach((key) => (voicemail[key] == undefined) && delete voicemail[key]);
+	return voicemail;
+}
+
 module.exports = {
 	generateQuery,
 	minifyQuery,
@@ -93,5 +107,6 @@ module.exports = {
 				return true;
 				break;
 		}
-	}
+	},
+	parseVoicemailInfo
 }

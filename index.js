@@ -94,10 +94,12 @@ watcher.on("add", async (event, path) => {
 	if (watched.includes(path)) return;
 	watched.push(path);
 
-	// extract file name from path
-	let filename = path.split("/").pop();
-	// extract mailbox from path (path looks like /var/spool/asterisk/voicemail/default/1000/INBOX/file.wav)
-	let mailbox = path.split("/")[6];
+	// extract file name from path, needs to be node 16 compatible, path.split is not
+	let filename = path.substring(path.lastIndexOf("/") + 1);
+
+	// extract mailbox from path (path looks like /var/spool/asterisk/voicemail/default/1000/INBOX/file.wav), needs to be node 16 compatible, path.split is not
+	let mailbox = path.substring(path.lastIndexOf("/", path.lastIndexOf("/") - 1) + 1, path.lastIndexOf("/"));
+
 	if(mailbox !== "INBOX") return; // ignore anything that isn't in the inbox
 	// if its a txt file (voicemail info), open it and get relavent info
 	// make a json object with the callerid, duration, origdate, and origmailbox from the txt file

@@ -94,10 +94,6 @@ const watcher = chokidar.watch(config.freepbx.voicemaildir, {
 	persistent: true
 });
 
-watcher.on('all', (event, path) => {
-	console.log(event, path);
-});
-
 watched = [];
 watcher.on("add", async (filePath, stats) => {
     if (startup) return;
@@ -137,6 +133,10 @@ watcher.on("add", async (filePath, stats) => {
     }).catch((error) => {
         console.log(`Could not send voicemail to ${discordUser.tag}, probably because they have DMs disabled\n${error}`);
     }) 
+});
+
+watcher.on('unlink', (filePath) => {
+	watched.splice(watched.indexOf(filePath), 1);
 });
 
 // Setup Discord bot

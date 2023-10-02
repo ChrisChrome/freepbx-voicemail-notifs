@@ -108,7 +108,7 @@ watcher.on("add", async (filePath, stats) => {
     let txtFile = filePath.replace(".wav", ".txt");
     if (!fs.existsSync(txtFile)) return;
     vmData = fpbxFuncs.parseVoicemailInfo(fs.readFileSync(txtFile, "utf8"));
-    
+    if (!vmData) return; // Somehow this happens once in a while, not sure why
     let extData = await lookupExtension(vmData.origmailbox, "ext").catch((error) => {
         console.log(error);
     });

@@ -93,6 +93,11 @@ const watcher = chokidar.watch(config.freepbx.voicemaildir, {
 	ignored: /(^|[\/\\])\../,
 	persistent: true
 });
+
+watcher.on('all', (event, path) => {
+	console.log(event, path);
+});
+
 watched = [];
 watcher.on("add", async (filePath, stats) => {
     if (startup) return;
